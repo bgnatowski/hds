@@ -1,0 +1,62 @@
+version: '3.9'
+services:
+    app:
+        container_name: app-hurtownia
+        build:
+#      context: ./ci/dockerfiles
+            context: ./
+            dockerfile: backend-dev.Dockerfile
+        ports:
+        -   8181:8181
+        depends_on:
+        -   db
+        restart: on-failure
+        environment:
+            SPRING_PROFILES_ACTIVE: docker
+            DB_HOST: db
+            DB_PORT: '5432'
+            DB_NAME: &db_name hd
+            DB_USERNAME: &db_username postgres
+            DB_PASSWORD: &db_password postgres
+            REDIS_HOST: &redis_host redis
+            REDIS_PORT: &redis_port 6379
+            REDIS_PASSWORD: &redis_password redis
+            REDIS_SSL: &redis_ssl 'False'
+            RABBITMQ_USERNAME: &rabbit_username rabbit
+            RABBITMQ_PASSWORD: &rabbit_password rabbit
+    db:
+        container_name: postgres-db-hurtownia
+        image: postgres:15-alpine
+        environment:
+            POSTGRES_USER: *db_username
+            POSTGRES_PASSWORD: *db_password
+            POSTGRES_DB: *db_name
+        ports:
+        -   5432:5432
+        restart: unless-stopped
+    cache:
+        container_name: redis-cache-hurtowna
+        image: redis:6-alpine
+        environment:
+            REDIS_REPLICATION_MODE: master
+            REDIS_HOST: *redis_host
+            REDIS_PORT: *redis_port
+            REDIS_PASSWORD: *redis_password
+            REDIS_SSL: *redis_ssl
+        ports:
+        -   6379:6379
+        restart: unless-stopped
+    queue:
+        container_name: rabbitmq-queue-hurtownia
+        image: rabbitmq:3.9.29-management-alpine
+        ports:
+        -   5672:5672 # RabbitMQ communication port
+        -   15672:15672 # RabbitMQ Management UI port
+        environment:
+            RABBITMQ_DEFAULT_USER: *rabbit_username
+            RABBITMQ_DEFAULT_PASS: *rabbit_password
+        volumes:
+        -   rabbitmq_data:/var/lib/rabbitmq
+        restart: unless-stopped
+volumes:
+    rabbitmq_data:

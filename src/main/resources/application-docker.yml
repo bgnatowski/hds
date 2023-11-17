@@ -1,0 +1,21 @@
+server:
+    port: 8181
+spring:
+    dataSource:
+        url: jdbc:postgresql://postgres-db-hurtownia:5432/hd
+        driverClassName: org.postgresql.Driver
+        username: postgres
+        password: postgres
+    jpa:
+        hibernate:
+            ddlAuto: update
+        showSql: false
+    properties:
+        hibernate:
+            format_sql: true
+        database: postgresql
+        databasePlatform: org.hibernate.dialect.PostgreSQLDialect
+
+url:
+    start:
+        proxy: https://www.proxy-list.download/api/v1/get?type=https&country=
