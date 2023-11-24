@@ -23,8 +23,16 @@ public class ProxyService {
     private final ProxySpider proxySpider;
 
     @PostConstruct
-    public void saveProxiesByCountryCode() {
-        String countryCode = "US";
+    public void saveStartingProxies() {
+        String countryCodeUSA = "US";
+        try {
+            saveProxiesListByCountryCodeToDb(countryCodeUSA);
+        } catch (IOException e) {
+            log.error("Error getting proxies for country code {}", countryCodeUSA, e);
+        }
+    }
+
+    public void saveProxiesByCountryCode(String countryCode) {
         try {
             saveProxiesListByCountryCodeToDb(countryCode);
         } catch (IOException e) {
