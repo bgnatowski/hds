@@ -24,6 +24,7 @@ services:
             REDIS_SSL: &redis_ssl 'False'
             RABBITMQ_USERNAME: &rabbit_username rabbit
             RABBITMQ_PASSWORD: &rabbit_password rabbit
+            RABBITMQ_VHOST: &rabbit_vhost rabbit
     db:
         container_name: postgres-db-hurtownia
         image: postgres:15-alpine
@@ -48,13 +49,14 @@ services:
         restart: unless-stopped
     queue:
         container_name: rabbitmq-queue-hurtownia
-        image: rabbitmq:3.9.29-management-alpine
+        image: rabbitmq:3.12-management-alpine
         ports:
         -   5672:5672 # RabbitMQ communication port
         -   15672:15672 # RabbitMQ Management UI port
         environment:
             RABBITMQ_DEFAULT_USER: *rabbit_username
             RABBITMQ_DEFAULT_PASS: *rabbit_password
+            RABBITMQ_VHOST: *rabbit_vhost
         volumes:
         -   rabbitmq_data:/var/lib/rabbitmq
         restart: unless-stopped
