@@ -1,7 +1,33 @@
 version: '3.9'
 services:
+    loadbalancer:
+        container_name: loadbalancer
+        image: traefik:latest
+        command:
+        -   --log.level=DEBUG
+        -   --entrypoints.web.address=:80
+        -   --providers.docker
+        -   --providers.docker.exposedByDefault=true
+        -   --api
+        -   --api.dashboard=true
+        -   --api.debug=true
+        -   --api.insecure=true
+        ports:
+        -   80:80
+        -   8080:8080
+        volumes:
+        -   /var/run/docker.sock:/var/run/docker.sock:ro
+        #        - ../configs/traefik/traefik.yaml:/traefik.yaml
+        labels:
+        -   traefik.enable=true
+        -   traefik.http.routers.traefik-router.rule=Host(traefik.localhost)
+        -   traefik.http.routers.traefik-router.entrypoints=web
+        -   traefik.http.routers.traefik-router.service=traefik-service
+        -   traefik.http.services.traefik-service.loadbalancer.server.port=8080
+        restart: unless-stopped
+
     app:
-        container_name: app-hurtownia
+        container_name: app
         build:
 #      context: ./ci/dockerfiles
             context: ./
@@ -9,24 +35,51 @@ services:
         ports:
         -   8181:8181
         depends_on:
-        -   db
-        restart: on-failure
+            migrate:
+                condition: service_completed_successfully
+#        -   db
         environment:
-            SPRING_PROFILES_ACTIVE: docker
+            SPRING_PROFILES_ACTIVE: &spring_profiles_active docker
             DB_HOST: db
             DB_PORT: '5432'
             DB_NAME: &db_name hd
             DB_USERNAME: &db_username postgres
             DB_PASSWORD: &db_password postgres
-            REDIS_HOST: &redis_host redis
-            REDIS_PORT: &redis_port 6379
-            REDIS_PASSWORD: &redis_password redis
-            REDIS_SSL: &redis_ssl 'False'
-            RABBITMQ_USERNAME: &rabbit_username rabbit
-            RABBITMQ_PASSWORD: &rabbit_password rabbit
-            RABBITMQ_VHOST: &rabbit_vhost rabbit
+
+            CACHE_HOST: &cache_host cache
+            CACHE_PORT: &cache_port 6379
+            CACHE_SSL: &cache_ssl 'false'
+            CACHE_USER: &cache_user redis
+            CACHE_PASSWORD: &cache_password redis
+
+            QUEUE_HOST: &queue_host queue
+            QUEUE_PORT: &queue_port '5672'
+            QUEUE_VHOST: &queue_vhost default-vhost
+            QUEUE_SSL: &queue_ssl false
+            QUEUE_USER: &queue_user rabbit
+            QUEUE_PASS: &queue_pass rabbit
+        deploy:
+            replicas: 1
+            restart_policy:
+                condition: on-failure
+
+    migrate:
+        container_name: migrate
+        build:
+            context: ./
+            dockerfile: backend-dev.Dockerfile
+        entrypoint: java -jar app.jar
+        depends_on:
+            db:
+                condition: service_healthy
+            queue:
+                condition: service_healthy
+            cache:
+                condition: service_healthy
+        environment:
+            SPRING_PROFILES_ACTIVE: *spring_profiles_active
     db:
-        container_name: postgres-db-hurtownia
+        container_name: db
         image: postgres:15-alpine
         environment:
             POSTGRES_USER: *db_username
@@ -34,31 +87,69 @@ services:
             POSTGRES_DB: *db_name
         ports:
         -   5432:5432
-        restart: unless-stopped
+        healthcheck:
+            test: [CMD-SHELL, 'pg_isready -U ${POSTGRES_USER-postgres} -d ${POSTGRES_NAME-postgres}']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
     cache:
-        container_name: redis-cache-hurtowna
-        image: redis:6-alpine
+        container_name: cache
+        image: redis:7-alpine
         environment:
             REDIS_REPLICATION_MODE: master
-            REDIS_HOST: *redis_host
-            REDIS_PORT: *redis_port
-            REDIS_PASSWORD: *redis_password
-            REDIS_SSL: *redis_ssl
-        ports:
-        -   6379:6379
-        restart: unless-stopped
+            REDIS_PASSWORD: *cache_password
+            REDIS_PORT: *cache_port
+        healthcheck:
+            test: [CMD, redis-cli, --raw, incr, ping]
+            interval: 10s
+            timeout: 5s
+            retries: 10
+
     queue:
-        container_name: rabbitmq-queue-hurtownia
+        container_name: queue
         image: rabbitmq:3.12-management-alpine
         ports:
         -   5672:5672 # RabbitMQ communication port
         -   15672:15672 # RabbitMQ Management UI port
         environment:
-            RABBITMQ_DEFAULT_USER: *rabbit_username
-            RABBITMQ_DEFAULT_PASS: *rabbit_password
-            RABBITMQ_VHOST: *rabbit_vhost
-        volumes:
-        -   rabbitmq_data:/var/lib/rabbitmq
-        restart: unless-stopped
-volumes:
-    rabbitmq_data:
+            RABBITMQ_DEFAULT_USER: *queue_user
+            RABBITMQ_DEFAULT_PASS: *queue_pass
+            RABBITMQ_DEFAULT_VHOST: *queue_vhost
+            RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: -rabbitmq_management  path_prefix "/rmq"
+
+        healthcheck:
+            test: rabbitmq-diagnostics -q ping
+            interval: 10s
+            timeout: 5s
+            retries: 5
+        labels:
+        -   traefik.enable=true
+        -   traefik.http.routers.queue-router.rule=Host(`queue.localhost`)
+        -   traefik.http.routers.queue-router.entrypoints=web
+        -   traefik.http.routers.queue-router.service=queue-service
+        -   traefik.http.services.queue-service.loadbalancer.server.port=15672
+
+    # Zookeeper and Kafka localhost:9092 / broker:29092
+    zookeeper:
+        container_name: zookeeper
+        image: confluentinc/cp-zookeeper:7.3.0
+        hostname: zookeeper
+        environment:
+            ZOOKEEPER_CLIENT_PORT: 2181
+            ZOOKEEPER_TICK_TIME: 2000
+    broker:
+        container_name: broker
+        image: confluentinc/cp-kafka:7.3.0
+        ports:
+        -   9092:9092
+        depends_on:
+        -   zookeeper
+        environment:
+            KAFKA_BROKER_ID: 1
+            KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+            KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+            KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://broker:29092
+            KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+            KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+            KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
