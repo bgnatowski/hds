@@ -22,3 +22,8 @@ spring:
 url:
     start:
         proxy: https://www.proxy-list.download/api/v1/get?type=https&country=
+
+
+# proces sprawdzania np co pol godziny czy proxy są git i oflagować np
+# selenium - jak strona dynamiczna
+# twitter scrapowac walla i po tagach ogarniac ogarniac ?
