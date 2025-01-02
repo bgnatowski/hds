@@ -1,1 +1,1 @@
-## WebScraping - Projekt z Hurtowni Danych
+## Proxy API

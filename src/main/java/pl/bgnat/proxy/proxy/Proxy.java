@@ -1,4 +1,4 @@
-package pl.bgnat.hds.proxy;
+package pl.bgnat.proxy.proxy;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 

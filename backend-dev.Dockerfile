@@ -11,6 +11,6 @@ RUN mvn clean package -DskipTests
 # Etap 2: Uruchamianie aplikacji
 FROM openjdk:17-slim
 WORKDIR /app
-COPY --from=build /app/target/hds-1.0.jar ./app.jar
+COPY --from=build /app/target/proxy-api-1.0.jar ./proxy-api.jar
 
-CMD ["java", "-jar", "app.jar"]
+CMD ["java", "-jar", "proxy-api.jar"]

@@ -1,33 +1,7 @@
 version: '3.9'
 services:
-    loadbalancer:
-        container_name: loadbalancer
-        image: traefik:latest
-        command:
-        -   --log.level=DEBUG
-        -   --entrypoints.web.address=:80
-        -   --providers.docker
-        -   --providers.docker.exposedByDefault=true
-        -   --api
-        -   --api.dashboard=true
-        -   --api.debug=true
-        -   --api.insecure=true
-        ports:
-        -   80:80
-        -   8080:8080
-        volumes:
-        -   /var/run/docker.sock:/var/run/docker.sock:ro
-        #        - ../configs/traefik/traefik.yaml:/traefik.yaml
-        labels:
-        -   traefik.enable=true
-        -   traefik.http.routers.traefik-router.rule=Host(traefik.localhost)
-        -   traefik.http.routers.traefik-router.entrypoints=web
-        -   traefik.http.routers.traefik-router.service=traefik-service
-        -   traefik.http.services.traefik-service.loadbalancer.server.port=8080
-        restart: unless-stopped
-
-    app:
-        container_name: app
+    proxy-app:
+        container_name: proxy-app
         build:
 #      context: ./ci/dockerfiles
             context: ./
@@ -36,16 +10,14 @@ services:
         -   8181:8181
         depends_on:
         -   db
-        -   queue
         -   cache
 #            migrate:
 #                condition: service_completed_successfully
-
         environment:
             SPRING_PROFILES_ACTIVE: &spring_profiles_active docker
             DB_HOST: db
             DB_PORT: '5432'
-            DB_NAME: &db_name hd
+            DB_NAME: &db_name proxies
             DB_USERNAME: &db_username postgres
             DB_PASSWORD: &db_password postgres
 
@@ -95,7 +67,6 @@ services:
             interval: 10s
             timeout: 5s
             retries: 5
-
     cache:
         container_name: cache
         image: redis:7-alpine
@@ -108,51 +79,3 @@ services:
             interval: 10s
             timeout: 5s
             retries: 10
-
-    queue:
-        container_name: queue
-        image: rabbitmq:3.12-management-alpine
-        ports:
-        -   5672:5672 # RabbitMQ communication port
-        -   15672:15672 # RabbitMQ Management UI port
-        environment:
-            RABBITMQ_DEFAULT_USER: *queue_user
-            RABBITMQ_DEFAULT_PASS: *queue_pass
-            RABBITMQ_DEFAULT_VHOST: *queue_vhost
-            RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: -rabbitmq_management  path_prefix "/rmq"
-
-        healthcheck:
-            test: rabbitmq-diagnostics -q ping
-            interval: 10s
-            timeout: 5s
-            retries: 5
-        labels:
-        -   traefik.enable=true
-        -   traefik.http.routers.queue-router.rule=Host(`queue.localhost`)
-        -   traefik.http.routers.queue-router.entrypoints=web
-        -   traefik.http.routers.queue-router.service=queue-service
-        -   traefik.http.services.queue-service.loadbalancer.server.port=15672
-
-    # Zookeeper and Kafka localhost:9092 / broker:29092
-    zookeeper:
-        container_name: zookeeper
-        image: confluentinc/cp-zookeeper:7.3.0
-        hostname: zookeeper
-        environment:
-            ZOOKEEPER_CLIENT_PORT: 2181
-            ZOOKEEPER_TICK_TIME: 2000
-    broker:
-        container_name: broker
-        image: confluentinc/cp-kafka:7.3.0
-        ports:
-        -   9092:9092
-        depends_on:
-        -   zookeeper
-        environment:
-            KAFKA_BROKER_ID: 1
-            KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-            KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
-            KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://broker:29092
-            KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-            KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-            KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1

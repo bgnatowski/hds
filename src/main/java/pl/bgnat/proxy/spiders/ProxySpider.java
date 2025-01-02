@@ -1,4 +1,4 @@
-package pl.bgnat.hds.spiders;
+package pl.bgnat.proxy.spiders;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -18,13 +18,14 @@ public class ProxySpider {
     @Value("${url.start.proxy}")
     private String start_url;
 
-    public List<String> getProxiesListByCountryCode(String countryCode) throws IOException {
+    public List<String> getProxiesListByCountryCode(String countryCode) throws IOException, InterruptedException {
         String[] proxies = getProxiesByCountryCode(countryCode);
         return mapToJsonArrayList(countryCode, proxies);
     }
 
-    private String[] getProxiesByCountryCode(String countryCode) throws IOException {
+    private String[] getProxiesByCountryCode(String countryCode) throws IOException, InterruptedException {
         Document document = Jsoup.connect(start_url + countryCode).get();
+        Thread.sleep(1000);
         String proxyText = document.body().text();
         String[] proxies = proxyText.split("\\s+");
         return proxies;
