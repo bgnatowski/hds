@@ -6,8 +6,8 @@ spring:
   dataSource:
     url: jdbc:postgresql://localhost:5432/proxies
     driverClassName: org.postgresql.Driver
-    username: postgres
-    password: postgres
+    username: postgres_proxy
+    password: postgres_proxy_pass
   jpa:
     hibernate:
       dialect: org.postgresql.Driver

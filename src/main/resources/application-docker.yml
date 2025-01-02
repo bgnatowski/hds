@@ -2,10 +2,10 @@ server:
     port: 8181
 spring:
     dataSource:
-        url: jdbc:postgresql://db:5432/proxies
+        url: jdbc:postgresql://proxy-db:5432/proxies
         driverClassName: org.postgresql.Driver
-        username: postgres
-        password: postgres
+        username: postgres_proxy
+        password: postgres_proxy_pass
     jpa:
         hibernate:
             ddlAuto: update

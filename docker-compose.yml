@@ -1,81 +1,39 @@
-version: '3.9'
 services:
     proxy-app:
         container_name: proxy-app
         build:
-#      context: ./ci/dockerfiles
             context: ./
             dockerfile: backend-dev.Dockerfile
         ports:
-        -   8181:8181
+            - 8181:8181
         depends_on:
-        -   db
-        -   cache
-#            migrate:
-#                condition: service_completed_successfully
+            - proxy-db
         environment:
             SPRING_PROFILES_ACTIVE: &spring_profiles_active docker
             DB_HOST: db
             DB_PORT: '5432'
             DB_NAME: &db_name proxies
-            DB_USERNAME: &db_username postgres
-            DB_PASSWORD: &db_password postgres
-
-            CACHE_HOST: &cache_host cache
-            CACHE_PORT: &cache_port 6379
-            CACHE_SSL: &cache_ssl 'false'
-            CACHE_USER: &cache_user redis
-            CACHE_PASSWORD: &cache_password redis
-
-            QUEUE_HOST: &queue_host queue
-            QUEUE_PORT: &queue_port '5672'
-            QUEUE_VHOST: &queue_vhost default-vhost
-            QUEUE_SSL: &queue_ssl false
-            QUEUE_USER: &queue_user rabbit
-            QUEUE_PASS: &queue_pass rabbit
+            DB_USERNAME: &db_username postgres_proxy
+            DB_PASSWORD: &db_password postgres_proxy_pass
         deploy:
             replicas: 1
             restart_policy:
                 condition: on-failure
-
-#    migrate:
-#        container_name: migrate
-#        build:
-#            context: ./
-#            dockerfile: backend-dev.Dockerfile
-#        entrypoint: java -jar app.jar
-#        depends_on:
-#            db:
-#                condition: service_healthy
-#            queue:
-#                condition: service_healthy
-#            cache:
-#                condition: service_healthy
-#        environment:
-#            SPRING_PROFILES_ACTIVE: *spring_profiles_active
-    db:
-        container_name: db
+    proxy-db:
+        container_name: proxy-db
         image: postgres:15-alpine
         environment:
             POSTGRES_USER: *db_username
             POSTGRES_PASSWORD: *db_password
             POSTGRES_DB: *db_name
         ports:
-        -   5432:5432
+            - 5432:5432
+        volumes:
+            - proxy_db_data:/var/lib/postgresql/data
         healthcheck:
             test: [CMD-SHELL, 'pg_isready -U ${POSTGRES_USER-postgres} -d ${POSTGRES_NAME-postgres}']
             interval: 10s
             timeout: 5s
             retries: 5
-    cache:
-        container_name: cache
-        image: redis:7-alpine
-        environment:
-            REDIS_REPLICATION_MODE: master
-            REDIS_PASSWORD: *cache_password
-            REDIS_PORT: *cache_port
-        healthcheck:
-            test: [CMD, redis-cli, --raw, incr, ping]
-            interval: 10s
-            timeout: 5s
-            retries: 10
+volumes:
+    proxy_db_data:
